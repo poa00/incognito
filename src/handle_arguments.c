@@ -134,9 +134,9 @@ BOOL read_counted_input(char *string, int string_size, DWORD *dwRead)
 
 	if (hINPUT == stdin)
 	{
-		ret_value = gets(string);
+		ret_value = gets_s(string, string_size);
 		*dwRead = (DWORD)strlen(string)+1;
-		return (BOOL)ret_value;
+		return (BOOL)(ret_value > 0 );
 	}
 	else
 		return ReadFile(hINPUT, string, string_size, dwRead, NULL);

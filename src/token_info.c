@@ -43,6 +43,19 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <wchar.h>
 #include "handle_arguments.h"
 
+BOOL get_token_user_sid(HANDLE token, PSID *user_PSID)
+{
+	LPVOID TokenUserInfo[BUF_SIZE];
+	DWORD returned_tokinfo_length;
+
+	if (!GetTokenInformation(token, TokenUser, TokenUserInfo, BUF_SIZE, &returned_tokinfo_length))
+		return FALSE;
+
+	*user_PSID = ((TOKEN_USER*)TokenUserInfo)->User.Sid;
+	return TRUE;
+
+}
+
 BOOL get_domain_from_token(HANDLE token, char *domain_to_return)
 {
 	LPVOID TokenUserInfo[BUF_SIZE];

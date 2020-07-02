@@ -124,7 +124,7 @@ static void CreateChildProcess(HANDLE token, char *command, PROCESS_INFORMATION 
 	old_winstation = GetProcessWindowStation();
 	new_winstation = CreateWindowStationA(
 						  "inc",
-						  (DWORD)NULL,
+						  (DWORD)0,
 						  MAXIMUM_ALLOWED,
 						  NULL
 						  );
@@ -135,7 +135,7 @@ static void CreateChildProcess(HANDLE token, char *command, PROCESS_INFORMATION 
 	  "default",
 	  NULL,
 	  NULL,
-	  (DWORD)NULL,
+	  (DWORD)0,
 	  GENERIC_ALL,
 	  NULL
 	);

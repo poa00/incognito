@@ -42,6 +42,7 @@ BOOL has_assignprimarytoken_priv(HANDLE hToken);
 DWORD TryEnableDebugPriv(HANDLE hToken);
 DWORD TryEnableAssignPrimaryPriv(HANDLE hToken);
 
+BOOL get_token_user_sid(HANDLE token, PSID *user_PSID);
 BOOL get_domain_username_from_token(HANDLE token, char *full_name_to_return);
 BOOL get_domain_groups_from_token(HANDLE token, char **group_name_array[], DWORD *num_groups);
 BOOL get_domain_from_token(HANDLE token, char *domain_to_return);
