@@ -169,6 +169,7 @@ void usage(char *programName)
 
 	output_string("\texe [options] <token> <command>\t\n\n");
 	output_string("\t\t-c\tEnable communication by console\n");
+	output_string("\t\t-s\tSpecify session id\n");
 	output_string("\n");
 		
 	output_string("\n");
@@ -252,11 +253,15 @@ void handle_options(int argc, char *argv[])
 	}
 	else if (!_stricmp("exe", command))
 	{
-		while ((c = getopt(argc, argv, "c")) != -1)
+		long session_id;
+		while ((c = getopt(argc, argv, "s:c")) != -1)
 		{
 			switch (c) 
 			{		
 				case 'c':	console_mode = TRUE; break;
+				case 's':
+					session_id = strtol(optarg, NULL, 0);
+					break;
 				default:	output_string("[-] Unknown execute command option\n"); return;
 			}	
 		}
@@ -268,7 +273,7 @@ void handle_options(int argc, char *argv[])
 			return;
 		}
 
-		execute_process_with_primary_token(argv[optind], argv[optind+1], console_mode);
+		execute_process_with_primary_token(argv[optind], argv[optind+1], console_mode, session_id);
 		return;
 	}
 	else

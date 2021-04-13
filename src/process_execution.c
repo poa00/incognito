@@ -54,10 +54,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "token_info.h"
 #include "handle_arguments.h"
 
-void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMPERSONATION_LEVEL impersonation_level);
+void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMPERSONATION_LEVEL impersonation_level, int session_var);
 
 
-void execute_process_with_primary_token(char *requested_username, char *command, BOOL console_mode)
+void execute_process_with_primary_token(char *requested_username, char *command, BOOL console_mode, int session_var)
 {
 	DWORD num_unique_tokens = 0, num_tokens = 0, i;
 	unique_user_token *uniq_tokens = calloc(BUF_SIZE, sizeof(unique_user_token));
@@ -116,12 +116,12 @@ void execute_process_with_primary_token(char *requested_username, char *command,
 					{
 						if (delegation_available && is_delegation_token(token_list[i].token))
 						{
-							create_process(token_list[i].token, command, console_mode, SecurityDelegation);
+							create_process(token_list[i].token, command, console_mode, SecurityDelegation, session_var);
 							goto cleanup;
 						}
 						else 
 						{
-							create_process(token_list[i].token, command, console_mode, SecurityImpersonation);
+							create_process(token_list[i].token, command, console_mode, SecurityImpersonation, session_var);
 							goto cleanup;
 						}
 					}
@@ -718,7 +718,7 @@ BOOL AddAceToDesktop(HDESK hdesk, PSID psid)
 //	return MQ_OK;
 //}
 
-void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMPERSONATION_LEVEL impersonation_level)
+void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMPERSONATION_LEVEL impersonation_level, int session_var)
 {
 	STARTUPINFO si;
 	//PROCESS_INFORMATION pi;
@@ -745,9 +745,14 @@ void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMP
 	}
 
 	// Associate process with parent process session. This makes non-console connections pop up with GUI hopefully
-	current_process = OpenProcess(MAXIMUM_ALLOWED, FALSE, GetCurrentProcessId());   
-	OpenProcessToken(current_process, MAXIMUM_ALLOWED, &current_process_token);
-	GetTokenInformation(current_process_token, TokenSessionId, &sessionid, sizeof(sessionid), &returned_length);
+	if (session_var == -1) {
+		current_process = OpenProcess(MAXIMUM_ALLOWED, FALSE, GetCurrentProcessId());
+		OpenProcessToken(current_process, MAXIMUM_ALLOWED, &current_process_token);
+		GetTokenInformation(current_process_token, TokenSessionId, &sessionid, sizeof(sessionid), &returned_length);
+	}
+	else {
+		sessionid = session_var;
+	}
 	printf("[+] Session: %d\n", sessionid);
 	SetTokenInformation(primary_token, TokenSessionId, &sessionid, sizeof(sessionid));
 

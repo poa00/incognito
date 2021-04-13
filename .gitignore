@@ -10,3 +10,6 @@
 *.db
 vs2012/.vs/Incognito/v15/.suo
 *.exe
+*.db-shm
+*.db-wal
+*.recipe
