@@ -33,6 +33,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef INC_CHILD_PROCESS_H
 #define INC_CHILD_PROCESS_H
 
-void CreateProcessWithPipeComm(HANDLE token, char *command);
+void CreateProcessWithPipeComm(HANDLE token, char *command, char* working_dir, char* desktop_name);
+void CreateChildProcess(HANDLE, char* command, char* working_dir, char* desktop_name, PROCESS_INFORMATION*);
 
 #endif

@@ -33,6 +33,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _CRT_SECURE_NO_DEPRECATE 1
 #include <windows.h>
 #include <stdio.h>
+#include "child_process.h"
 #include "handle_arguments.h"
 
 #define BUFSIZE 4096
@@ -40,12 +41,10 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static HANDLE hChildStdinRd, hChildStdinWr,
    hChildStdoutRd, hChildStdoutWr, hStdout;
 
-void CreateChildProcess(HANDLE, char*, PROCESS_INFORMATION*);
 DWORD WINAPI WriteToPipe(LPVOID);
 DWORD WINAPI ReadFromPipe(LPVOID);
 
-
-void CreateProcessWithPipeComm(HANDLE token, char *command)
+void CreateProcessWithPipeComm(HANDLE token, char *command, char *working_dir, char * desktop_name)
 {
 	PROCESS_INFORMATION piProcInfo;
 	SECURITY_ATTRIBUTES saAttr;
@@ -81,7 +80,7 @@ void CreateProcessWithPipeComm(HANDLE token, char *command)
 	SetHandleInformation( hChildStdinWr, HANDLE_FLAG_INHERIT, 0);
 
 	// Now create the child process.
-	CreateChildProcess(token, command, &piProcInfo);
+	CreateChildProcess(token, command, working_dir, desktop_name, &piProcInfo);
 
   	hThread[0] = CreateThread(
             NULL,              // default security attributes
@@ -102,11 +101,11 @@ void CreateProcessWithPipeComm(HANDLE token, char *command)
 	WaitForSingleObject(piProcInfo.hProcess, INFINITE);
 }
 
-static void CreateChildProcess(HANDLE token, char *command, PROCESS_INFORMATION *piProcInfo)
+void CreateChildProcess(HANDLE token, char *command, char *working_dir, char *desktop_name, PROCESS_INFORMATION *piProcInfo)
 {
 	STARTUPINFO siStartInfo;
 	BOOL bFuncRetn = FALSE;
-	HWINSTA new_winstation, old_winstation;
+	//HWINSTA new_winstation, old_winstation;
 
 	// Set up members of the PROCESS_INFORMATION structure.
 	ZeroMemory( piProcInfo, sizeof(PROCESS_INFORMATION) );
@@ -118,28 +117,29 @@ static void CreateChildProcess(HANDLE token, char *command, PROCESS_INFORMATION 
 	siStartInfo.hStdOutput = hChildStdoutWr;
 	siStartInfo.hStdInput = hChildStdinRd;
 	siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
-	siStartInfo.lpDesktop = "inc\\default";
+	siStartInfo.lpDesktop = desktop_name;
+	//siStartInfo.lpDesktop = "inc\\default";
 
 	// Create new window station and save handle to existing one
-	old_winstation = GetProcessWindowStation();
-	new_winstation = CreateWindowStationA(
-						  "inc",
-						  (DWORD)0,
-						  MAXIMUM_ALLOWED,
-						  NULL
-						  );
-	
-	// Set process to new window station and create new desktop object within it
-	SetProcessWindowStation(new_winstation);
-	CreateDesktopA(
-	  "default",
-	  NULL,
-	  NULL,
-	  (DWORD)0,
-	  GENERIC_ALL,
-	  NULL
-	);
-	SetProcessWindowStation(old_winstation);
+	//old_winstation = GetProcessWindowStation();
+	//new_winstation = CreateWindowStationA(
+	//					  "inc",
+	//					  (DWORD)0,
+	//					  MAXIMUM_ALLOWED,
+	//					  NULL
+	//					  );
+	//
+	//// Set process to new window station and create new desktop object within it
+	//SetProcessWindowStation(new_winstation);
+	//CreateDesktopA(
+	//  "default",
+	//  NULL,
+	//  NULL,
+	//  (DWORD)0,
+	//  GENERIC_ALL,
+	//  NULL
+	//);
+	//SetProcessWindowStation(old_winstation);
 
 	// Create the child process.
 	bFuncRetn = CreateProcessAsUserA(
@@ -151,7 +151,7 @@ static void CreateChildProcess(HANDLE token, char *command, PROCESS_INFORMATION 
 	  TRUE,          // handles are inherited
 	  0,             // creation flags
 	  NULL,          // use parent's environment
-	  NULL,          // use parent's current directory
+	  working_dir,          // use parent's current directory
 	  &siStartInfo,  // STARTUPINFO pointer
 	  piProcInfo);  // receives PROCESS_INFORMATION
 

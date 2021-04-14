@@ -716,21 +716,63 @@ BOOL AddAceToDesktop(HDESK hdesk, PSID psid)
 //	delete[] wszDomainName;
 //
 //	return MQ_OK;
+// 
+// 
 //}
+
+BOOL CALLBACK EnumDesktopProc( LPTSTR lpszDesktop, LPARAM lParam ) {
+	printf("[+] Desktop: %s\n", lpszDesktop);
+	return TRUE;
+}
+
+BOOL EnumerateDesktopsForTargetSession(DWORD sessionid) {
+
+	HANDLE current_process, target_session_station_handle, current_process_token;
+	BOOL bEnumReturnVal = FALSE;
+
+	current_process = OpenProcess(MAXIMUM_ALLOWED, FALSE, GetCurrentProcessId());
+	OpenProcessToken(current_process, MAXIMUM_ALLOWED, &current_process_token);
+	SetTokenInformation(current_process_token, TokenSessionId, &sessionid, sizeof(sessionid));
+
+
+	//Open the default station
+	target_session_station_handle = OpenWindowStation("WinSta0", FALSE, WINSTA_ALL_ACCESS);
+	if (target_session_station_handle == NULL) {
+		output_status_string("[-] Failed to open window station, %s. Aborting\n", "WinSta0");
+		return FALSE;
+	}
+
+	//Enumerate the desktops
+	bEnumReturnVal = EnumDesktops(target_session_station_handle, EnumDesktopProc, 0);
+	if (bEnumReturnVal == FALSE) {
+		output_status_string("[-] Failed to enumerate desktops. Aborting\n");
+		return FALSE;
+	}
+
+	//Close the window station
+	CloseWindowStation(target_session_station_handle);
+
+	//Revert token back to admin/SYSTEM token
+	RevertToSelf();
+
+	return TRUE;
+}
+
 
 void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMPERSONATION_LEVEL impersonation_level, int session_var)
 {
-	STARTUPINFO si;
-	//PROCESS_INFORMATION pi;
+	//STARTUPINFO si;
+	PROCESS_INFORMATION piProcInfo;
 	char *zeros = (char *)calloc(1, 0x80);
 	char window_station[100];
-	DWORD length_needed, sessionid = 1, returned_length;
-	//, ret_value;
+	char desktop_name[] = "WinSta0\\Default";
+	char child_proc_dir[] = "C:\\Users\\Public\\";
+	DWORD length_needed, sessionid = 1, returned_length; //, ret_value;
 	HANDLE new_token, primary_token, current_process, current_process_token, station_handle, desk_handle;
 	PSID pTokenSid = NULL;
 	PACL pDacl = NULL, pSacl = NULL;
 	PSECURITY_DESCRIPTOR pSD = NULL;
-
+	
 	// Create primary token
 	if (!DuplicateTokenEx(token, TOKEN_ALL_ACCESS, NULL, impersonation_level, TokenPrimary, &primary_token))
 	{
@@ -749,54 +791,47 @@ void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMP
 		current_process = OpenProcess(MAXIMUM_ALLOWED, FALSE, GetCurrentProcessId());
 		OpenProcessToken(current_process, MAXIMUM_ALLOWED, &current_process_token);
 		GetTokenInformation(current_process_token, TokenSessionId, &sessionid, sizeof(sessionid), &returned_length);
+
+		// Create window station if necessary for invisible process
+		GetUserObjectInformationA( GetProcessWindowStation(), UOI_NAME,
+		(PVOID) window_station, 100, &length_needed );
+
+
+		station_handle = GetProcessWindowStation();
+		//ret_value = GetSecurityInfo(station_handle, SE_WINDOW_OBJECT, 
+		//	DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION, NULL, NULL, &pDacl, &pSacl, &pSD);
+		//printf("[+] SecInfo Ret: %d\n", ret_value);
+
+		//if (!_stricmp(window_station, "WinSta0"))
+		//printf("[+] Parent Process Windows Station: %s\n", window_station);
+		////si.lpDesktop = desktop_name;
+
+		//else
+		//	si.lpDesktop = window_station;
+		if (!get_token_user_sid(primary_token, &pTokenSid)) {
+			printf("[-] Get token SID Failed: %d\n", GetLastError());
+		}
+
+		//Add all access to station
+		AddAceToWindowStation(station_handle, pTokenSid);
+
+		//Add all access to desktop
+		//Get a handle to the interactive desktop.
+		desk_handle = GetThreadDesktop(GetCurrentThreadId());
+		AddAceToDesktop(desk_handle, pTokenSid);
 	}
 	else {
 		sessionid = session_var;
+		//if (EnumerateDesktopsForTargetSession(sessionid) == FALSE)
+		//	return;		
 	}
 	printf("[+] Session: %d\n", sessionid);
 	SetTokenInformation(primary_token, TokenSessionId, &sessionid, sizeof(sessionid));
 
-	// Create window station if necessary for invisible process
-	GetUserObjectInformationA(
-		GetProcessWindowStation(),
-		UOI_NAME,
-		(PVOID) window_station,
-		100,
-		&length_needed
-	);
-
-	ZeroMemory(&si, sizeof(STARTUPINFO));
-    si.cb= sizeof(STARTUPINFO);
-
-	station_handle = GetProcessWindowStation();
-		//ret_value = GetSecurityInfo(station_handle, SE_WINDOW_OBJECT, 
-	//	DACL_SECURITY_INFORMATION | SACL_SECURITY_INFORMATION, NULL, NULL, &pDacl, &pSacl, &pSD);
-	//printf("[+] SecInfo Ret: %d\n", ret_value);
-
-	//if (!_stricmp(window_station, "WinSta0"))
-	printf("[+] Station: %s\n", window_station);
-	si.lpDesktop = "WinSta0\\Default";
-	//else
-	//	si.lpDesktop = window_station;
-	if (!get_token_user_sid(primary_token, &pTokenSid)) {
-		printf("[-] Get token SID Failed: %d\n", GetLastError());
-	}
-
-	//Add all access to station
-	AddAceToWindowStation(station_handle, pTokenSid);
-
-	//Add all access to desktop
-	 // Get a handle to the interactive desktop.
-	desk_handle = GetThreadDesktop(GetCurrentThreadId());
-
-	//Add all access to station
-	AddAceToDesktop(desk_handle, pTokenSid);
-
-
 	if (console_mode)
 	{
 		output_status_string("[*] Attempting to create new child process and communicate via anonymous pipe\n\n");
-		CreateProcessWithPipeComm(primary_token, command);
+		CreateProcessWithPipeComm(primary_token, command, child_proc_dir, desktop_name);
 		if (!grepable_mode)
 			output_string("\n");
 		output_status_string("[*] Returning from exited process\n");
@@ -804,22 +839,7 @@ void create_process(HANDLE token, char *command, BOOL console_mode, SECURITY_IMP
 	}
 	else
 	{
-		if (CreateProcessAsUserA(
-      		primary_token,     // client's access token
-      		NULL,              // file to execute
-      		command,           // command line
-      		NULL,              // pointer to process SECURITY_ATTRIBUTES
-      		NULL,              // pointer to thread SECURITY_ATTRIBUTES
-      		FALSE,             // handles are not inheritable
-			CREATE_NEW_PROCESS_GROUP | CREATE_NEW_CONSOLE | CREATE_BREAKAWAY_FROM_JOB,// creation flags
-      		NULL,              // pointer to new environment block
-     		NULL,              // name of current directory
-      		&si,               // pointer to STARTUPINFO structure
-			(LPPROCESS_INFORMATION)zeros                // receives information about new process
-   		))
-			output_status_string("[+] Created new process with token successfully\n");
-		else 
-			output_status_string("[-] Failed to create new process: %d\n", GetLastError());
+		CreateChildProcess(primary_token, command, child_proc_dir, desktop_name, &piProcInfo);
 	}
 	
 	CloseHandle(primary_token);
